@@ -278,6 +278,12 @@ input[type=range].nudge{border-radius:999px}
 .ready{margin-top:16px;border-radius:18px;background:#2E1366;color:#fff;padding:16px;text-align:center}
 .ready b{display:block;font-size:19px}
 .ready span{font-size:13.5px;opacity:.85}
+.daily{border-radius:18px;background:#FFF6DA;padding:12px 14px;margin-bottom:12px}
+.daily small{display:block;font-size:12px;font-weight:800;color:#8a5a00}
+.daily b{display:block;font-size:14.5px;margin:2px 0 8px;color:#3a2a00}
+.daily .opts{display:flex;gap:6px;flex-wrap:wrap}
+.daily .opts button{border:1.5px solid #E9C46A;background:#fff;border-radius:999px;padding:7px 11px;font-weight:700;font-size:12.5px;color:#5a3d00}
+.daily .res{font-size:13px;color:#5a3d00;line-height:1.4}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -285,7 +291,7 @@ input[type=range].nudge{border-radius:999px}
 <div class="stage" id="stage">
   <section class="brief" aria-label="About this prototype">
     <h1>Neu Squads: Weekly Campus Quests</h1>
-    <p>A working prototype of the feature inside the Tata Neu app. Everything on the phone is clickable, and coins, streak and campus rank update as you play.</p>
+    <p>A working prototype of the feature inside the Tata Neu app. Everything on the phone is clickable, and squad points, streak and campus rank update as you play.</p>
     <ol>
       <li>On Home, tap the Neu Squads card and create a squad: verify your campus, name it and invite friends.</li>
       <li>Play the four quests: guess the Croma price, vote on a Westside look, check in, and pay your share of the hostel run.</li>
@@ -337,7 +343,7 @@ input[type=range].nudge{border-radius:999px}
           <div class="sub">SPJIMR campus league, week 1</div>
           <div class="avatars" id="avatars"></div>
           <div class="stats">
-            <div class="stat" id="stCoins"><b id="coins">1,240</b><span>Squad NeuCoins</span></div>
+            <div class="stat" id="stCoins"><b id="coins">1,240</b><span>Squad points</span></div>
             <div class="stat" id="stStreak"><b id="streak">3 wks</b><span>Squad streak</span></div>
             <div class="stat" id="stRank"><b id="rank">#4</b><span>Campus rank</span></div>
           </div>
@@ -350,12 +356,13 @@ input[type=range].nudge{border-radius:999px}
 
         <div class="panel on" id="p-quests">
           <div class="drop"><span class="pulse"></span><span>Dropped Monday 9 AM. <b id="qcount">0 of 4 done</b>, resets in 6 days</span></div>
+          <div class="daily" id="daily"></div>
           <div id="questList"></div>
           <div class="freeze"><span class="coin" style="background:radial-gradient(circle at 35% 30%,#E4F1FF,#7FB2F2 70%);color:#1d3a66">❄</span><span><b>1 streak freeze left.</b> Use it in exam week and the squad keeps its streak.</span></div>
         </div>
 
         <div class="panel" id="p-board">
-          <div class="drop">This week's campus league, ranked by squad NeuCoins</div>
+          <div class="drop">This week's campus league, ranked by squad points. The top 3 squads share 1,000 NeuCoins on Sunday.</div>
           <div id="board"></div>
           <div class="box-card locked" id="boxCard">
             <div class="gift" id="giftIcon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8S10 3 7.5 4.5 9 8 12 8zm0 0s2-5 4.5-3.5S15 8 12 8z"/></svg></div>
@@ -411,7 +418,8 @@ const CONTACTS = [
   {n:'Karan', c:'#1F9D63', s:'PGDM 1st year, B-Block'}, {n:'Sana', c:'#E98A15', s:'PGDM 1st year, C-Block'},
   {n:'Meera', c:'#0E8FA8', s:'BBA 3rd year, A-Wing'}, {n:'Dev', c:'#6D5BD0', s:'PGDM 2nd year, B-Block'}
 ];
-const BONUS = 200;
+const BONUS = 50;
+const PRIZE_POOL = 1000;
 let members = [ME];
 const QUESTS = [
   {id:'price', t:"Guess the price of this week's Croma drop", brand:'Croma', bc:'#0B7A75', pts:20, kind:'free', ab:'CR'},
@@ -420,11 +428,11 @@ const QUESTS = [
   {id:'run',   t:'Hostel run: one shared BigBasket cart, split in-app', brand:'BigBasket', bc:'#84C225', pts:100, kind:'paid', ab:'BB'}
 ];
 const OTHERS = [
-  {n:'Hostel A-Wing Hustlers', s:1420}, {n:'Library Ghosts', s:1310}, {n:'Canteen Cartel', s:1180},
-  {n:'Night Owls', s:1090}, {n:'Backbenchers', s:860}
+  {n:'Hostel A-Wing Hustlers', s:310}, {n:'Library Ghosts', s:260}, {n:'Canteen Cartel', s:205},
+  {n:'Night Owls', s:170}, {n:'Backbenchers', s:120}
 ];
 let S;
-function fresh(){ return {squad:null, coins:0, my:320, done:{}, boxOpened:false, contrib:{}, streak:0, view:'home',
+function fresh(){ return {squad:null, coins:0, my:320, daily:null, done:{}, boxOpened:false, contrib:{}, streak:0, view:'home',
   cv:{step:0, sent:false, verified:false, name:'Hostel B-Block', picks:[], joined:0, ready:false}}; }
 S = fresh();
 
@@ -494,6 +502,7 @@ function render(){
   if (!S.squad) { $('myCoins').textContent = fmt(S.my); guide(); return; }
   const n = Object.keys(S.done).length;
   $('squadName').textContent = S.squad.name;
+  renderDaily();
   $('coins').textContent = fmt(S.coins);
   $('qcount').textContent = n + ' of 4 done';
   const r = rankNow();
@@ -506,7 +515,7 @@ function render(){
     return `<button class="quest ${d?'done':''} ${q.kind==='paid'?'buy':''}" data-q="${q.id}">
       <span class="ic" style="background:${q.bc}">${q.ab}</span>
       <span><span class="t">${q.t}</span><span class="m" style="display:block">${q.brand}<span class="tag ${q.kind==='paid'?'paid':'free'}">${q.kind==='paid'?'Purchase':'No purchase'}</span></span></span>
-      <span class="pts">${d ? 'Done' : '<span class="coin">N</span>+'+q.pts}</span></button>`;
+      <span class="pts">${d ? 'Done' : '+'+q.pts+' pts'}</span></button>`;
   }).join('');
   document.querySelectorAll('.quest').forEach(b => b.addEventListener('click', () => openQuest(b.dataset.q)));
   // board
@@ -518,6 +527,21 @@ function render(){
   $('boxText').textContent = S.boxOpened ? 'Opened. A new box drops next Sunday.' : (all ? 'All 4 quests done. Your box is ready.' : `Finish all 4 quests to unlock it (${n} of 4 done).`);
   $('myCoins').textContent = fmt(S.my);
   guide();
+}
+
+function renderDaily(){
+  const d = $('daily'); if (!d) return;
+  const opts = ['Wireless earbuds', 'Smartwatch', 'Laptop backpack'];
+  if (!S.daily) {
+    d.innerHTML = `<small>Today's drop · 20 seconds · +5 pts</small><b>Which Croma deal should drop for students next?</b>
+      <div class="opts">${opts.map((o,i)=>`<button data-o="${i}">${o}</button>`).join('')}</div>`;
+    d.querySelectorAll('button').forEach(b => b.onclick = () => {
+      S.daily = opts[+b.dataset.o]; S.coins += 5; render(); bump('stCoins');
+      toast('+5 squad points. A new drop lands tomorrow at 9 AM');
+    });
+  } else {
+    d.innerHTML = `<small>Today's drop · done</small><div class="res">You picked <b style="display:inline;margin:0">${S.daily}</b>. Your campus is split 46% earbuds, 38% smartwatch, 16% backpack. New drop tomorrow at 9 AM.</div>`;
+  }
 }
 function renderGoal(){
   const pooled = Object.values(S.contrib).reduce((a,b)=>a+b,0);
@@ -540,8 +564,8 @@ function award(id, pts, msg){
   S.coins += pts; S.contrib.You += 0;
   render(); bump('stCoins');
   const after = rankNow();
-  if (after < before) { bump('stRank'); toast(`+${pts} NeuCoins. Squad moved up to #${after}!`); }
-  else toast(msg || `+${pts} NeuCoins for the squad`);
+  if (after < before) { bump('stRank'); toast(`+${pts} squad points. Squad moved up to #${after}!`); }
+  else toast(msg || `+${pts} squad points`);
   if (id === 'check') bump('stStreak');
 }
 
@@ -585,8 +609,8 @@ function qPrice(){
     const best = gs.reduce((a,b)=> Math.abs(b.v-actual) < Math.abs(a.v-actual) ? b : a);
     $('pres').innerHTML = `<div class="result"><b>Croma price: starting at ₹99,900</b><br>You were ${diff.toFixed(1)}% away. ${best.n === 'You' ? 'You are the closest in the squad!' : best.n + ' is closest in the squad so far.'}
       <div class="guesses" style="margin-top:10px">${gs.map(x=>`<div><span>${x.n}</span><b>₹${fmt(x.v)}</b></div>`).join('')}</div></div>`;
-    $('pgo').textContent = 'Collect 20 NeuCoins';
-    setSheetGuide($('pgo'), 'Collect your coins');
+    $('pgo').textContent = 'Collect 20 points';
+    setSheetGuide($('pgo'), 'Collect your points');
     $('pgo').onclick = () => { award('price', 20); closeSheet(); };
   }, {once:true});
 }
@@ -613,9 +637,9 @@ function qVote(){
     const others = members.length - 1, votes = [Math.ceil(others/2), Math.floor(others/2)]; votes[pick]++;
     document.querySelectorAll('.look .vbar i').forEach((i,k)=> i.style.width = (votes[k]/members.length*100)+'%');
     $('vres').innerHTML = `<div class="result">Squad votes: <b>${votes[0]}</b> for Denim layer, <b>${votes[1]}</b> for Festive kurta. ${votes[pick] > members.length/2 ? 'Your pick is winning.' : ''}</div>
-      <button class="primary" id="vgo">Collect 15 NeuCoins</button>`;
+      <button class="primary" id="vgo">Collect 15 points</button>`;
     $('vgo').onclick = () => { award('vote', 15); closeSheet(); };
-    setSheetGuide($('vgo'), 'Collect your coins');
+    setSheetGuide($('vgo'), 'Collect your points');
   }));
   if (done) $('vres').innerHTML = '<div class="result">You already voted this week.</div>';
   else setSheetGuide(document.querySelector('.looks'), 'Tap the look you like');
@@ -640,9 +664,9 @@ function qCheck(){
   $('cgo').addEventListener('click', () => {
     $('mydot').classList.add('y');
     $('cres').innerHTML = `<div class="result"><b>All ${members.length} checked in, 3 days running.</b><br>Your squad's first streak week is done.</div>`;
-    $('cgo').textContent = 'Collect 30 NeuCoins';
-    $('cgo').onclick = () => { award('check', 30, '+30 NeuCoins. First streak week done'); closeSheet(); };
-    setSheetGuide($('cgo'), 'Collect your coins');
+    $('cgo').textContent = 'Collect 30 points';
+    $('cgo').onclick = () => { award('check', 30, '+30 squad points. First streak week done'); closeSheet(); };
+    setSheetGuide($('cgo'), 'Collect your points');
   }, {once:true});
 }
 
@@ -669,9 +693,9 @@ function qRun(){
     setTimeout(() => {
       $('paidList').children[0].className = 'y'; $('paidList').children[0].textContent = 'You paid';
       $('rres').innerHTML = `<div class="result"><b>₹${share} paid.</b> ${paidBy.length + 1} of ${members.length} have paid. The order goes to BigBasket once everyone pays.</div>`;
-      b.disabled = false; b.textContent = 'Collect 100 NeuCoins';
+      b.disabled = false; b.textContent = 'Collect 100 points';
       b.onclick = () => { award('run', 100); closeSheet(); };
-      setSheetGuide(b, 'Collect your coins');
+      setSheetGuide(b, 'Collect your points');
     }, 900);
   }, {once:true});
 }
@@ -695,7 +719,7 @@ function renderCreate(){
     body.innerHTML = `
       <div class="how"><span class="n">1</span><span><b>Form a squad</b><span>3 to 6 friends from the same campus</span></span></div>
       <div class="how"><span class="n">2</span><span><b>Play weekly quests</b><span>Price guesses, polls, check-ins and shared carts across Tata brands</span></span></div>
-      <div class="how"><span class="n">3</span><span><b>Compete on campus</b><span>Earn squad NeuCoins and climb the campus leaderboard every week</span></span></div>
+      <div class="how"><span class="n">3</span><span><b>Compete on campus</b><span>Earn squad points and climb the campus league. The top 3 squads each week share a NeuCoin prize.</span></span></div>
       <div class="bonus"><span class="coin">N</span><span>Founding bonus: <b>${BONUS} NeuCoins</b> for every member who joins.</span></div>
       <button class="primary" id="cvPrimary">Create a squad</button>
       <button class="ghost" id="cvJoin">Join with an invite code</button>`;
@@ -761,9 +785,7 @@ function renderCreate(){
   }
 }
 function readyHtml(n){
-  const coins = n * BONUS;
-  const all = OTHERS.map(o=>o.s).concat([coins]).sort((a,b)=>b-a);
-  return `<div class="ready"><b>Your squad is ready</b><span>Founding bonus: +${fmt(coins)} NeuCoins. You enter the campus league at #${all.indexOf(coins) + 1}.</span></div>
+  return `<div class="ready"><b>Your squad is ready</b><span>Founding bonus: +${BONUS} NeuCoins for each of you. You join this week's campus league at #${OTHERS.length + 1}.</span></div>
     <button class="primary" id="cvPrimary">Start competing</button>`;
 }
 function joinAnimation(){
@@ -783,10 +805,10 @@ $('cvBack').addEventListener('click', () => {
 function startSquad(){
   members = [ME].concat(CONTACTS.filter(p => S.cv.picks.includes(p.n)));
   S.squad = {name: S.cv.name};
-  S.coins = members.length * BONUS;
+  S.coins = 0; S.my += BONUS;
   S.contrib = {}; members.forEach(m => S.contrib[m.n] = BONUS);
   render(); show('hub'); seg('quests');
-  toast(`+${fmt(S.coins)} NeuCoins founding bonus for ${S.squad.name}`);
+  toast(`+${BONUS} NeuCoins founding bonus. Play quests to climb the league`);
 }
 
 /* mystery box */
@@ -799,7 +821,7 @@ $('boxBtn').addEventListener('click', () => {
     S.coins += prize; render(); bump('stCoins');
     const after = rankNow();
     if (after < before) bump('stRank');
-    toast(after < before ? `Mystery box: +${prize} NeuCoins. Squad moved up to #${after}!` : `Mystery box: +${prize} NeuCoins`);
+    toast(after < before ? `Mystery box: +${prize} squad points. Squad moved up to #${after}!` : `Mystery box: +${prize} squad points`);
   }, 700);
 });
 
@@ -838,7 +860,7 @@ function pickTarget(){
   }
   if (!S.boxOpened) {
     if (panel !== 'board') return [document.querySelector('.seg[data-p=board]'), 'Your mystery box is ready', 'All 4 quests done'];
-    return [$('boxBtn'), 'Open the box for bonus coins', ''];
+    return [$('boxBtn'), 'Open the box for bonus points', ''];
   }
   if (!goalAdded) {
     if (panel !== 'goal') return [document.querySelector('.seg[data-p=goal]'), 'Check the squad goal', 'Last step'];
